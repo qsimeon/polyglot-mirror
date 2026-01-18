@@ -5,52 +5,75 @@ import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 export default function PolyglotMirror() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const landmarkerRef = useRef<FaceLandmarker | null>(null);
-
-    // ✅ We use a ref to hold the animation frame ID and the "impure" logic
     const requestRef = useRef<number>(null);
+    const lastTimestampRef = useRef<number>(-1);
 
     useEffect(() => {
+        // Temporarily suppress MediaPipe's internal WASM stderr output
+        const originalConsoleError = console.error;
+        console.error = (...args) => {
+            const msg = args[0]?.toString?.() || '';
+            // Filter out MediaPipe WASM internal messages
+            if (msg.includes('vision_wasm_internal') ||
+                msg.includes('finishProcessing') ||
+                msg.includes('@mediapipe')) {
+                return;
+            }
+            originalConsoleError.apply(console, args);
+        };
+
         async function setup() {
-            const vision = await FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-            );
+            try {
+                const vision = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+                );
 
-            landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
-                baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                    delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numFaces: 1
-            });
+                landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numFaces: 1,
+                    outputFaceBlendshapes: false,
+                    outputFacialTransformationMatrixes: false
+                });
 
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.onloadeddata = () => {
-                    // ✅ Kick off the loop only once the video is ready
-                    requestRef.current = requestAnimationFrame(predict);
-                };
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720 }
+                });
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.onloadedmetadata = () => {
+                        videoRef.current?.play().then(() => {
+                            setTimeout(() => {
+                                requestRef.current = requestAnimationFrame(predict);
+                            }, 200);
+                        });
+                    };
+                }
+            } catch (err) {
+                originalConsoleError("Setup failed:", err);
             }
         }
 
-        // ✅ The "impure" loop is defined safely inside useEffect
         const predict = () => {
+            const video = videoRef.current;
+            const landmarker = landmarkerRef.current;
 
-            if (!videoRef.current || !landmarkerRef.current) {
-                requestRef.current = requestAnimationFrame(predict);
-                return;
-            }
+            if (video && landmarker && video.readyState >= 2 && video.videoWidth > 0) {
+                const timestamp = performance.now();
 
-            else if (videoRef.current && landmarkerRef.current) {
-                // performance.now() is safe here because it's inside an async/callback context
-                const nowInMs = performance.now();
-                const results = landmarkerRef.current.detectForVideo(videoRef.current, nowInMs);
+                if (timestamp > lastTimestampRef.current) {
+                    lastTimestampRef.current = timestamp;
 
-                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-                    const mouthAnchor = results.faceLandmarks[0][13];
-                    console.log("Mouth Position:", mouthAnchor.x.toFixed(2));
-                    // TODO: Update your 3D bubble ref position here
+                    const results = landmarker.detectForVideo(video, timestamp);
+
+                    if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                        const mouthAnchor = results.faceLandmarks[0][13];
+                        console.log("Mouth Y:", mouthAnchor.y.toFixed(2));
+                    }
                 }
             }
             requestRef.current = requestAnimationFrame(predict);
@@ -58,22 +81,32 @@ export default function PolyglotMirror() {
 
         setup();
 
-        // Clean up to prevent memory leaks during the hackathon!
         return () => {
+            // Restore original console.error
+            console.error = originalConsoleError;
+
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            if (videoRef.current?.srcObject) {
+                const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+                tracks.forEach(track => track.stop());
+            }
+            if (landmarkerRef.current) landmarkerRef.current.close();
         };
     }, []);
 
     return (
-        <div className="relative w-screen h-screen bg-black overflow-hidden">
+        <div className="relative w-screen h-screen bg-black overflow-hidden flex items-center justify-center">
             <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60"
+                muted
+                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-70"
             />
-            <div className="absolute top-10 left-10 text-cyan-400 font-mono text-xl animate-pulse">
-                [ SYSTEM: TRACKING_LIVE ]
+            <div className="z-10 pointer-events-none border-2 border-cyan-500/30 p-4 rounded-lg bg-black/40 backdrop-blur-sm">
+                <p className="text-cyan-400 font-mono text-sm uppercase tracking-widest animate-pulse">
+                    • Neural Link Established
+                </p>
             </div>
         </div>
     );
