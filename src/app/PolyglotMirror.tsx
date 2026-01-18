@@ -84,7 +84,7 @@ export default function PolyglotMirror() {
             <div className="absolute inset-0 z-20 pointer-events-none">
                 <Canvas camera={{ position: [0, 0, 5] }}>
                     <ambientLight intensity={0.5} />
-                    <SpeechBubble anchorPoint={mouthPos} text="કેમ છો?" />
+                    <SpeechBubble anchorPoint={mouthPos} text={bubbleText} />
                 </Canvas>
             </div>
 
