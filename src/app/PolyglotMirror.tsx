@@ -1,112 +1,81 @@
 "use client";
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { Canvas } from '@react-three/fiber';
+import SpeechBubble from './SpeechBubble';
 
 export default function PolyglotMirror() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const landmarkerRef = useRef<FaceLandmarker | null>(null);
     const requestRef = useRef<number>(null);
-    const lastTimestampRef = useRef<number>(-1);
+
+    // 1. THE HYDRATION SHIELD
+    //const [hasMounted, setHasMounted] = useState(false);
+    const [mouthPos, setMouthPos] = useState({ x: 0.5, y: 0.5 });
 
     useEffect(() => {
-        // Temporarily suppress MediaPipe's internal WASM stderr output
-        const originalConsoleError = console.error;
-        console.error = (...args) => {
-            const msg = args[0]?.toString?.() || '';
-            // Filter out MediaPipe WASM internal messages
-            if (msg.includes('vision_wasm_internal') ||
-                msg.includes('finishProcessing') ||
-                msg.includes('@mediapipe')) {
-                return;
-            }
-            originalConsoleError.apply(console, args);
-        };
+        //setHasMounted(true); // Tell React we are now safely on the client
 
         async function setup() {
-            try {
-                const vision = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-                );
+            const vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+            );
 
-                landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                        delegate: "GPU"
-                    },
-                    runningMode: "VIDEO",
-                    numFaces: 1,
-                    outputFaceBlendshapes: false,
-                    outputFacialTransformationMatrixes: false
-                });
+            landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO",
+                numFaces: 1
+            });
 
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720 }
-                });
-
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.onloadedmetadata = () => {
-                        videoRef.current?.play().then(() => {
-                            setTimeout(() => {
-                                requestRef.current = requestAnimationFrame(predict);
-                            }, 200);
-                        });
-                    };
-                }
-            } catch (err) {
-                originalConsoleError("Setup failed:", err);
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadeddata = () => {
+                    requestRef.current = requestAnimationFrame(predict);
+                };
             }
         }
 
         const predict = () => {
-            const video = videoRef.current;
-            const landmarker = landmarkerRef.current;
-
-            if (video && landmarker && video.readyState >= 2 && video.videoWidth > 0) {
-                const timestamp = performance.now();
-
-                if (timestamp > lastTimestampRef.current) {
-                    lastTimestampRef.current = timestamp;
-
-                    const results = landmarker.detectForVideo(video, timestamp);
-
-                    if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-                        const mouthAnchor = results.faceLandmarks[0][13];
-                        console.log("Mouth Y:", mouthAnchor.y.toFixed(2));
-                    }
+            if (videoRef.current && landmarkerRef.current) {
+                const results = landmarkerRef.current.detectForVideo(videoRef.current, performance.now());
+                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                    const mouth = results.faceLandmarks[0][13];
+                    setMouthPos({ x: mouth.x, y: mouth.y });
                 }
             }
             requestRef.current = requestAnimationFrame(predict);
         };
 
         setup();
-
         return () => {
-            // Restore original console.error
-            console.error = originalConsoleError;
-
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
-            if (videoRef.current?.srcObject) {
-                const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-                tracks.forEach(track => track.stop());
-            }
-            if (landmarkerRef.current) landmarkerRef.current.close();
         };
     }, []);
 
+    // 2. ONLY RENDER ON CLIENT
+    //if (!hasMounted) return <div className="w-screen h-screen bg-black" />;
+
     return (
-        <div className="relative w-screen h-screen bg-black overflow-hidden flex items-center justify-center">
+        <div className="relative w-screen h-screen bg-black overflow-hidden">
+            {/* Background Video */}
             <video
                 ref={videoRef}
                 autoPlay
-                playsInline
                 muted
-                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-70"
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-50"
             />
-            <div className="z-10 pointer-events-none border-2 border-cyan-500/30 p-4 rounded-lg bg-black/40 backdrop-blur-sm">
-                <p className="text-cyan-400 font-mono text-sm uppercase tracking-widest animate-pulse">
-                    • Neural Link Established
-                </p>
+
+            {/* 3D Scene - Ensure this is absolute and covers everything */}
+            <div className="absolute inset-0 z-20 pointer-events-none">
+                <Canvas camera={{ position: [0, 0, 5] }}>
+                    <ambientLight intensity={0.5} />
+                    <SpeechBubble anchorPoint={mouthPos} text="કેમ છો?" />
+                </Canvas>
             </div>
         </div>
     );
