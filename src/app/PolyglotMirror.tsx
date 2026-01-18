@@ -80,11 +80,11 @@ export default function PolyglotMirror() {
                 className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-50"
             />
 
-            {/* 3D Scene - Speech Bubble */}
+            {/* 3D Scene - Ensure this is absolute and covers everything */}
             <div className="absolute inset-0 z-20 pointer-events-none">
                 <Canvas camera={{ position: [0, 0, 5] }}>
                     <ambientLight intensity={0.5} />
-                    <SpeechBubble anchorPoint={mouthPos} text={bubbleText} />
+                    <SpeechBubble anchorPoint={mouthPos} text="કેમ છો?" />
                 </Canvas>
             </div>
 
