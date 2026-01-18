@@ -40,6 +40,13 @@ export default function PolyglotMirror() {
         translate(text);
     });
 
+    useEffect(() => {
+        if (transcript && isListening) {
+            translate(transcript);
+        }
+    }, [targetLanguage]);
+
+
     // Face tracking setup
     useEffect(() => {
         async function setup() {
