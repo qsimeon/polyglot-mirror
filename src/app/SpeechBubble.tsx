@@ -9,7 +9,7 @@ export default function SpeechBubble({ anchorPoint, text }: { anchorPoint: { x: 
     useFrame((state) => {
         if (!meshRef.current) return;
         const { width, height } = state.viewport;
-        const targetX = (anchorPoint.x - 0.5) * width;
+        const targetX = -(anchorPoint.x - 0.5) * width; // Negative to match mirrored video
         const targetY = -(anchorPoint.y - 0.5) * height;
 
         // Smoothly follow the mouth with a small offset (y + 0.6)
