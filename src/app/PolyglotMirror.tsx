@@ -28,7 +28,9 @@ export default function PolyglotMirror() {
         zh: "你好！",
         ar: "مرحبا!",
         hi: "नमस्ते!",
-        gu: "નમસ્તે!"
+        gu: "નમસ્તે!",
+        ht: "Bonjou",
+        mr: "नमस्कार"
     };
 
     // Custom hooks for speech and translation
