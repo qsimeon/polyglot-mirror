@@ -29,41 +29,31 @@ export async function POST(request: NextRequest) {
     const targetLangName = LANGUAGE_NAMES[targetLanguage] || targetLanguage;
     console.log(`Translating "${text}" to ${targetLangName}`);
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
+    const googleApiKey = process.env.GOOGLE_CLOUD_API_KEY;
+    if (!googleApiKey) {
       return NextResponse.json(
-        { error: "OpenAI API key not configured" },
+        { error: "Google Cloud API key not configured" },
         { status: 500 }
       );
     }
 
-    // Use OpenAI for fast, reliable translation
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Use Google Cloud Translation API for fast, reliable, free translation
+    const url = `https://translation.googleapis.com/language/translate/v2?key=${googleApiKey}`;
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${openaiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are a translator. Translate the user's text to ${targetLangName}. Only respond with the translation, nothing else.`
-          },
-          {
-            role: "user",
-            content: text
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 200,
+        q: text,
+        target: targetLanguage,
+        format: "text",
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("OpenAI API error:", error);
+      console.error("Google Cloud Translation API error:", error);
       return NextResponse.json(
         { error: "Translation service error" },
         { status: response.status }
@@ -71,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const translatedText = data.choices[0]?.message?.content?.trim();
+    const translatedText = data.data?.translations?.[0]?.translatedText;
 
     if (!translatedText) {
       return NextResponse.json(
