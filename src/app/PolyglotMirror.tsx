@@ -3,15 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { Canvas } from '@react-three/fiber';
 import SpeechBubble from './SpeechBubble';
-import { translateText } from './translateService';
 
 export default function PolyglotMirror() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const landmarkerRef = useRef<FaceLandmarker | null>(null);
     const requestRef = useRef<number>(null);
-    const recognitionRef = useRef<any>(null);
 
-    // State
+    // 1. THE HYDRATION SHIELD
+    //const [hasMounted, setHasMounted] = useState(false);
     const [mouthPos, setMouthPos] = useState({ x: 0.5, y: 0.5 });
     const [transcript, setTranscript] = useState<string>("");
     const [translatedText, setTranslatedText] = useState<string>("");
@@ -31,7 +30,7 @@ export default function PolyglotMirror() {
         hi: "नमस्ते!",
         gu: "નમસ્તે!"
     };
-    
+
     useEffect(() => {
         //setHasMounted(true); // Tell React we are now safely on the client
 
@@ -142,9 +141,7 @@ export default function PolyglotMirror() {
         }
     };
 
-    const bubbleText = isListening && translatedText
-        ? translatedText
-        : defaultGreetings[targetLanguage] || "Hello?";
+    const bubbleText = isListening && translatedText ? translatedText : "કેમ છો?";
 
     return (
         <div className="relative w-screen h-screen bg-black overflow-hidden">
@@ -157,11 +154,11 @@ export default function PolyglotMirror() {
                 className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-50"
             />
 
-            {/* 3D Scene - Speech Bubble */}
+            {/* 3D Scene - Ensure this is absolute and covers everything */}
             <div className="absolute inset-0 z-20 pointer-events-none">
                 <Canvas camera={{ position: [0, 0, 5] }}>
                     <ambientLight intensity={0.5} />
-                    <SpeechBubble anchorPoint={mouthPos} text={bubbleText} />
+                    <SpeechBubble anchorPoint={mouthPos} text="કેમ છો?" />
                 </Canvas>
             </div>
 
